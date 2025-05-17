@@ -179,7 +179,8 @@ async def analyze(update: Update, context: CallbackContext) -> None:
                     # Check if source is just a number or placeholder
                     if str(source).isdigit() or not source or len(source) < 5:
                         # For numeric placeholders, format more descriptively
-                        sources_text += f"- {title}\n"
+                        source = f"https://www.google.com/search?q={title.replace(' ', '+')}+{user_message.replace(' ', '+')}"
+                        sources_text += f"- [{title}]({source})\n"
                     else:
                         # For actual URLs or meaningful references
                         if not source.startswith(('http://', 'https://')):
