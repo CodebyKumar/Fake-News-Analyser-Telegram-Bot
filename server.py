@@ -1,18 +1,15 @@
-from fastapi import FastAPI, HTTPException, Body, Depends, status, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, Dict, Any
 import uvicorn
-import json
-from datetime import datetime
-import io
-import os
 import tempfile
+import os
 import requests
 from dotenv import load_dotenv
 
-# Import functions from main.py
-from analyse import analyze_news, create_news_input, extract_json_from_response, json_to_formatted_text
+# Import functions from analyse.py
+from analyse import analyze_news, create_news_input, extract_json_from_response
 
 # Load environment variables
 load_dotenv()
@@ -46,28 +43,6 @@ class NewsAnalysisResponse(BaseModel):
     reason: str
     sources: Dict[str, str]
     detected_language: Optional[str] = None  # Added detected language field
-    
-class MessageRequest(BaseModel):
-    text: Optional[str] = None
-    image_url: Optional[str] = None
-    sender: str
-    recipient: Optional[str] = None
-    timestamp: Optional[datetime] = None
-    target_language: Optional[str] = None  # Added target language field
-
-class MessageResponse(BaseModel):
-    id: str
-    text: Optional[str] = None
-    image_url: Optional[str] = None
-    sender: str
-    recipient: Optional[str] = None
-    timestamp: datetime
-    analysis: Optional[Dict[str, Any]] = None
-    status: str
-    detected_language: Optional[str] = None  # Added detected language field
-
-# In-memory data store
-messages_db = []
 
 # Language detection and translation functions
 async def detect_language(text):
@@ -156,7 +131,7 @@ async def analyze_content(analysis_request: NewsAnalysisRequest):
     response_text = analyze_news(news_input)
     
     # Parse response
-    analysis_result = extract_json_from_response(response_text)
+    analysis_result = extract_json_from_response(response_text, analysis_request.text or "")
 
     if not analysis_result:
         raise HTTPException(status_code=500, detail="Failed to parse analysis results")
@@ -210,7 +185,7 @@ async def analyze_uploaded_content(
         response_text = analyze_news(news_input)
         
         # Parse response
-        analysis_result = extract_json_from_response(response_text)
+        analysis_result = extract_json_from_response(response_text, text or "")
         
         if not analysis_result:
             raise HTTPException(status_code=500, detail="Failed to parse analysis results")
@@ -221,58 +196,6 @@ async def analyze_uploaded_content(
         # Clean up the temporary file
         if image_path and os.path.exists(image_path):
             os.unlink(image_path)
-
-@app.get("/api/messages", response_model=List[MessageResponse])
-async def get_messages():
-    """Get all messages"""
-    return messages_db
-
-@app.get("/api/messages/{message_id}", response_model=MessageResponse)
-async def get_message(message_id: str):
-    """Get a specific message by ID"""
-    for message in messages_db:
-        if message["id"] == message_id:
-            return message
-    raise HTTPException(status_code=404, detail="Message not found")
-
-@app.post("/api/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-async def create_message(message: MessageRequest):
-    """Create a new message and analyze if it contains news content"""
-    import uuid
-    
-    new_message = message.dict()
-    new_message["id"] = str(uuid.uuid4())
-    new_message["timestamp"] = new_message.get("timestamp") or datetime.now()
-    new_message["status"] = "received"
-    
-    # Analyze message content if it has text or image
-    if message.text or message.image_url:
-        try:
-            news_input = create_news_input(
-                news_text=message.text or "",
-                image_source=message.image_url
-            )
-            response_text = analyze_news(news_input)
-            analysis_result = extract_json_from_response(response_text)
-            new_message["analysis"] = analysis_result
-        except Exception as e:
-            print(f"Error during analysis: {e}")
-            new_message["analysis"] = {"error": str(e)}
-    
-    messages_db.append(new_message)
-    return new_message
-
-@app.delete("/api/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_message(message_id: str):
-    """Delete a message by ID"""
-    global messages_db
-    original_length = len(messages_db)
-    messages_db = [msg for msg in messages_db if msg["id"] != message_id]
-    
-    if len(messages_db) == original_length:
-        raise HTTPException(status_code=404, detail="Message not found")
-    
-    return None
 
 # Run the server
 if __name__ == "__main__":
