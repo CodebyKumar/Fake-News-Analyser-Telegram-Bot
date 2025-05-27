@@ -31,7 +31,7 @@ def analyze_news(news_input, model_id=model_id, google_search_tool=google_search
             NOTE: Reverify the verdict before returning the response.
             In sources the title should be the title of the source and the link should be the link to the source.
             NOTE: IF HALF THE MESSAGE IS REAL AND HALF THE MESSAGE IS NOT THE RETURN CONFIDENCE AS 0.5 AND VERDICT AS UNCERTAIN
-
+             
             """,
             tools=[google_search_tool]
         )
